@@ -1,0 +1,19 @@
+{
+  "name": "livenova",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Modern live streaming platform — exceeds X77Live with WebRTC, real-time chat, gifts, and multi-language support",
+  "workspaces": [
+    "apps/web",
+    "apps/server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n web,server -c cyan,magenta \"npm run dev -w apps/web\" \"npm run dev -w apps/server\"",
+    "build": "npm run build -w apps/web && npm run build -w apps/server",
+    "start": "npm run start -w apps/server",
+    "seed": "npm run seed -w apps/server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
