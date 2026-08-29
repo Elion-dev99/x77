@@ -48,7 +48,17 @@ npm run dev:local    # 従来 Express サーバー (port 3001 + 5173)
 | 視聴者 | `demo_viewer` | `demo1234` |
 | 配信者 | `sakura_live` | `demo1234` |
 
-## Cloudflare デプロイ
+## GitHub Actions セットアップ
+
+リポジトリの **Settings → Secrets and variables → Actions** に以下を追加してください:
+
+| Secret | 説明 |
+|--------|------|
+| `CLOUDFLARE_API_TOKEN` | [API Token](https://dash.cloudflare.com/profile/api-tokens)（Workers Scripts Edit + D1 Edit 権限） |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare ダッシュボード右サイドバーの Account ID |
+| `JWT_SECRET` | （任意）本番用 JWT 署名キー |
+
+Secrets 設定後、`main` への push で自動デプロイされます。Secrets 未設定時は CI ビルドのみ実行され、デプロイはスキップされます（失敗しません）。
 
 ```bash
 export CLOUDFLARE_API_TOKEN="your-token"
