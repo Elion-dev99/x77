@@ -104,14 +104,62 @@ livenova/
 | GET | `/api/analytics` | Streamer analytics |
 | GET | `/api/stats` | Platform stats |
 
-## Production Deployment
+## Cloudflare Deployment (Production)
+
+Deploy LiveNova to Cloudflare Workers with D1 database and Durable Objects for WebSocket streaming.
+
+### Prerequisites
+
+1. [Cloudflare account](https://dash.cloudflare.com/sign-up)
+2. API Token with **Workers Scripts Edit** and **D1 Edit** permissions
+3. Account ID from Cloudflare dashboard
+
+### One-command deploy
 
 ```bash
-npm run build
-PORT=3001 npm start
+export CLOUDFLARE_API_TOKEN="your-api-token"
+export CLOUDFLARE_ACCOUNT_ID="your-account-id"
+./scripts/deploy-cloudflare.sh
 ```
 
-The server serves the built frontend and API from a single port.
+Or via npm:
+
+```bash
+CLOUDFLARE_API_TOKEN=xxx CLOUDFLARE_ACCOUNT_ID=yyy npm run deploy:cf
+```
+
+### Manual deploy
+
+```bash
+npm run build -w apps/web
+cd apps/worker
+npx wrangler d1 create livenova-db          # first time only
+npx wrangler d1 migrations apply livenova-db --remote
+npx wrangler deploy
+```
+
+Your app will be available at `https://livenova.<subdomain>.workers.dev`
+
+### GitHub Actions
+
+Add these secrets to your repository:
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
+Push to `main` to auto-deploy via `.github/workflows/deploy-cloudflare.yml`.
+
+### Local Cloudflare dev
+
+```bash
+npm run build -w apps/web
+cd apps/worker
+npx wrangler d1 migrations apply livenova-db --local
+npx wrangler dev
+```
+
+Open http://localhost:8787
+
+---
 
 ## License
 

@@ -5,11 +5,16 @@
   "description": "Modern live streaming platform — exceeds X77Live with WebRTC, real-time chat, gifts, and multi-language support",
   "workspaces": [
     "apps/web",
-    "apps/server"
+    "apps/server",
+    "apps/worker"
   ],
   "scripts": {
-    "dev": "concurrently -n web,server -c cyan,magenta \"npm run dev -w apps/web\" \"npm run dev -w apps/server\"",
+    "dev": "npm run dev -w apps/web & npm run dev -w apps/server",
+    "dev:cf": "npm run build -w apps/web && npm run dev -w apps/worker",
     "build": "npm run build -w apps/web && npm run build -w apps/server",
+    "build:cf": "npm run build -w apps/web",
+    "deploy:cf": "npm run build:cf && npm run deploy -w apps/worker",
+  "deploy:cf:script": "./scripts/deploy-cloudflare.sh",
     "start": "npm run start -w apps/server",
     "seed": "npm run seed -w apps/server"
   },
