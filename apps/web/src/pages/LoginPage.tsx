@@ -96,7 +96,7 @@ export function LoginPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-zinc-400 mb-1 block">{t('title')}</label>
+                  <label className="text-xs text-zinc-400 mb-1 block">{t('display_name')}</label>
                   <input
                     value={form.display_name}
                     onChange={(e) => setForm({ ...form, display_name: e.target.value })}

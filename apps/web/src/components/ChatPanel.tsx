@@ -20,7 +20,8 @@ interface ChatPanelProps {
   disabled?: boolean;
 }
 
-const quickEmojis = ['❤️', '🔥', '👏', '😂', '🎉', '💯'];
+const quickEmojis = ['❤️', '🔥', '👏', '😂', '🎉', '💯', '😮', '🌟', '👍', '💎'];
+const pickerEmojis = ['😀', '😍', '🥳', '😎', '🤔', '👋', '🙏', '💪', '🎵', '🎮'];
 
 export function ChatPanel({ messages, onSend, onReaction, disabled }: ChatPanelProps) {
   const { t } = useTranslation();
@@ -82,6 +83,14 @@ export function ChatPanel({ messages, onSend, onReaction, disabled }: ChatPanelP
             </button>
           ))}
         </div>
+        {showEmojis && (
+          <div className="flex flex-wrap gap-1 mb-2 p-2 rounded-lg bg-surface-700">
+            {pickerEmojis.map((emoji) => (
+              <button key={emoji} onClick={() => { onReaction(emoji); setShowEmojis(false); }}
+                className="text-lg hover:scale-125 transition-transform">{emoji}</button>
+            ))}
+          </div>
+        )}
         <div className="flex gap-2">
           <button
             onClick={() => setShowEmojis(!showEmojis)}

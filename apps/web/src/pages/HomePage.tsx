@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, Zap, MessageCircle, Gift, Globe, BarChart3, Users, Smartphone, Shield, PictureInPicture2 } from 'lucide-react';
 import { Header } from '../components/Header';
+import { MobileNav } from '../components/MobileNav';
 import { StreamCard } from '../components/StreamCard';
 import { api, type Stream } from '../lib/api';
 import clsx from 'clsx';
@@ -158,6 +159,7 @@ export function HomePage() {
           ))}
         </div>
       </section>
+      <MobileNav />
     </div>
   );
 }

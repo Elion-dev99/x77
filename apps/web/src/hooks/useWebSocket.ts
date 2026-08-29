@@ -12,15 +12,19 @@ export function useWebSocket(token: string | null) {
   const wsRef = useRef<WebSocket | null>(null);
   const handlersRef = useRef<Set<MessageHandler>>(new Set());
   const [connected, setConnected] = useState(false);
+  const reconnectRef = useRef(0);
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
 
-  useEffect(() => {
+  const connect = useCallback(() => {
     const ws = new WebSocket(getWsUrl());
     wsRef.current = ws;
 
     ws.onopen = () => {
       setConnected(true);
-      if (token) {
-        ws.send(JSON.stringify({ type: 'auth', token }));
+      reconnectRef.current = 0;
+      if (tokenRef.current) {
+        ws.send(JSON.stringify({ type: 'auth', token: tokenRef.current }));
       }
     };
 
@@ -31,13 +35,27 @@ export function useWebSocket(token: string | null) {
       } catch { /* ignore */ }
     };
 
-    ws.onclose = () => setConnected(false);
+    ws.onclose = () => {
+      setConnected(false);
+      const delay = Math.min(1000 * 2 ** reconnectRef.current, 10000);
+      reconnectRef.current += 1;
+      setTimeout(connect, delay);
+    };
+  }, []);
 
+  useEffect(() => {
+    connect();
     return () => {
-      ws.close();
+      wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [token]);
+  }, [connect]);
+
+  useEffect(() => {
+    if (connected && token && wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'auth', token }));
+    }
+  }, [token, connected]);
 
   const send = useCallback((msg: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

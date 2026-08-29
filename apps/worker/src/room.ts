@@ -20,6 +20,15 @@ export class StreamRoom extends DurableObject<Env> {
   private rooms = new Map<string, RoomState>();
 
   async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname === '/broadcast' && request.method === 'POST') {
+      const { streamId, type } = await request.json() as { streamId: string; type: string };
+      if (type === 'stream_ended') {
+        this.broadcastToRoom(streamId, { type: 'stream_ended' });
+      }
+      return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
+    }
+
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Expected WebSocket', { status: 426 });
     }

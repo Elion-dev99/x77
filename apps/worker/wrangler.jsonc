@@ -1,8 +1,9 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "livenova",
-	"main": "src/index.ts",
-	"compatibility_date": "2025-08-29",
+  "name": "livenova",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-08-29",
+  "workers_dev": true,
 	"compatibility_flags": [
 		"nodejs_compat"
 	],

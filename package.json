@@ -9,7 +9,8 @@
     "apps/worker"
   ],
   "scripts": {
-    "dev": "npm run dev -w apps/web & npm run dev -w apps/server",
+    "dev": "npm run build -w apps/web && npm run dev -w apps/worker",
+    "dev:local": "concurrently -n web,server -c cyan,magenta \"npm run dev -w apps/web\" \"npm run dev -w apps/server\"",
     "dev:cf": "npm run build -w apps/web && npm run dev -w apps/worker",
     "build": "npm run build -w apps/web && npm run build -w apps/server",
     "build:cf": "npm run build -w apps/web",

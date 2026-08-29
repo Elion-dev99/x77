@@ -7,6 +7,7 @@ import {
   getUserById, getUserByUsername, deductPoints, addPoints, getAuthUser,
 } from './auth';
 import { seedIfEmpty } from './seed';
+import { createNotification, broadcastStreamEnded } from './notify';
 
 type AppEnv = { Bindings: Env; Variables: { user?: User } };
 
@@ -122,6 +123,132 @@ export function createApp() {
     if (!stream) return c.json({ error: 'Not found' }, 404);
     if (stream.streamer_id !== user.id) return c.json({ error: 'Forbidden' }, 403);
     await c.env.DB.prepare(`UPDATE streams SET is_live = 0, ended_at = datetime('now'), viewer_count = 0 WHERE id = ?`).bind(c.req.param('id')).run();
+    await broadcastStreamEnded(c.env, c.req.param('id'));
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/streams/:id/verify-password', async (c) => {
+    const { password } = await c.req.json();
+    const stream = await c.env.DB.prepare('SELECT is_private, private_password FROM streams WHERE id = ?').bind(c.req.param('id')).first<{ is_private: number; private_password: string | null }>();
+    if (!stream) return c.json({ error: 'Not found' }, 404);
+    if (!stream.is_private) return c.json({ ok: true });
+    if (stream.private_password === password) return c.json({ ok: true });
+    return c.json({ error: 'Invalid password' }, 403);
+  });
+
+  app.post('/api/streams/:id/watch/start', async (c) => {
+    const user = await getAuthUser(c.req.raw, c.env);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+    const streamId = c.req.param('id');
+    const stream = await c.env.DB.prepare('SELECT * FROM streams WHERE id = ?').bind(streamId).first<Stream>();
+    if (!stream) return c.json({ error: 'Not found' }, 404);
+    if (stream.price_per_minute > 0 && user.points < stream.price_per_minute) {
+      return c.json({ error: 'Insufficient points' }, 402);
+    }
+    const id = nanoid();
+    await c.env.DB.prepare('INSERT INTO watch_sessions (id, stream_id, user_id) VALUES (?, ?, ?)').bind(id, streamId, user.id).run();
+    return c.json({ session_id: id, price_per_minute: stream.price_per_minute });
+  });
+
+  app.post('/api/streams/:id/watch/bill', async (c) => {
+    const user = await getAuthUser(c.req.raw, c.env);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+    const streamId = c.req.param('id');
+    const stream = await c.env.DB.prepare('SELECT * FROM streams WHERE id = ?').bind(streamId).first<Stream>();
+    if (!stream || stream.price_per_minute <= 0) return c.json({ ok: true, charged: 0 });
+    if (!(await deductPoints(c.env.DB, user.id, stream.price_per_minute))) {
+      return c.json({ error: 'Insufficient points', ended: true }, 402);
+    }
+    await addPoints(c.env.DB, stream.streamer_id, stream.price_per_minute);
+    await c.env.DB.prepare('UPDATE watch_sessions SET total_points = total_points + ?, last_billed_at = datetime(\'now\') WHERE stream_id = ? AND user_id = ? AND status = \'active\'')
+      .bind(stream.price_per_minute, streamId, user.id).run();
+    const updated = await getUserById(c.env.DB, user.id);
+    return c.json({ ok: true, charged: stream.price_per_minute, points: updated!.points });
+  });
+
+  app.patch('/api/users/me', async (c) => {
+    const user = await getAuthUser(c.req.raw, c.env);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+    const body = await c.req.json();
+    const { display_name, bio, region, avatar_url } = body;
+    await c.env.DB.prepare(`
+      UPDATE users SET display_name = COALESCE(?, display_name), bio = COALESCE(?, bio),
+      region = COALESCE(?, region), avatar_url = COALESCE(?, avatar_url) WHERE id = ?
+    `).bind(display_name || null, bio ?? null, region || null, avatar_url || null, user.id).run();
+    const updated = await getUserById(c.env.DB, user.id);
+    return c.json({ user: sanitizeUser(updated!) });
+  });
+
+  app.get('/api/users/:id/following-status', async (c) => {
+    const user = await getAuthUser(c.req.raw, c.env);
+    if (!user) return c.json({ following: false });
+    const row = await c.env.DB.prepare('SELECT 1 FROM follows WHERE follower_id = ? AND streamer_id = ?').bind(user.id, c.req.param('id')).first();
+    return c.json({ following: !!row });
+  });
+
+  app.get('/api/notifications', async (c) => {
+    const user = await getAuthUser(c.req.raw, c.env);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+    const notifications = await c.env.DB.prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50').bind(user.id).all();
+    const unread = await c.env.DB.prepare('SELECT COUNT(*) as c FROM notifications WHERE user_id = ? AND is_read = 0').bind(user.id).first<{ c: number }>();
+    return c.json({ notifications: notifications.results, unread: unread?.c ?? 0 });
+  });
+
+  app.post('/api/notifications/read-all', async (c) => {
+    const user = await getAuthUser(c.req.raw, c.env);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+    await c.env.DB.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ?').bind(user.id).run();
+    return c.json({ ok: true });
+  });
+
+  app.get('/api/two-shot/inbox', async (c) => {
+    const user = await getAuthUser(c.req.raw, c.env);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+    const sessions = await c.env.DB.prepare(`
+      SELECT ts.*, u.display_name as viewer_name, u.username as viewer_username
+      FROM two_shot_sessions ts JOIN users u ON ts.viewer_id = u.id
+      WHERE ts.streamer_id = ? ORDER BY ts.created_at DESC LIMIT 20
+    `).bind(user.id).all();
+    return c.json({ sessions: sessions.results });
+  });
+
+  app.get('/api/two-shot/my', async (c) => {
+    const user = await getAuthUser(c.req.raw, c.env);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+    const sessions = await c.env.DB.prepare(`
+      SELECT ts.*, u.display_name as streamer_name
+      FROM two_shot_sessions ts JOIN users u ON ts.streamer_id = u.id
+      WHERE ts.viewer_id = ? ORDER BY ts.created_at DESC LIMIT 20
+    `).bind(user.id).all();
+    return c.json({ sessions: sessions.results });
+  });
+
+  app.post('/api/two-shot/:id/accept', async (c) => {
+    const user = await getAuthUser(c.req.raw, c.env);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+    const session = await c.env.DB.prepare('SELECT * FROM two_shot_sessions WHERE id = ?').bind(c.req.param('id')).first<{ streamer_id: string; viewer_id: string }>();
+    if (!session || session.streamer_id !== user.id) return c.json({ error: 'Forbidden' }, 403);
+    await c.env.DB.prepare(`UPDATE two_shot_sessions SET status = 'active', started_at = datetime('now') WHERE id = ?`).bind(c.req.param('id')).run();
+    await createNotification(c.env.DB, session.viewer_id, 'two_shot', '2ショット開始', `${user.display_name} がリクエストを承認しました`, '/two-shot');
+    return c.json({ ok: true, status: 'active' });
+  });
+
+  app.post('/api/two-shot/:id/reject', async (c) => {
+    const user = await getAuthUser(c.req.raw, c.env);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+    const session = await c.env.DB.prepare('SELECT * FROM two_shot_sessions WHERE id = ?').bind(c.req.param('id')).first<{ streamer_id: string; viewer_id: string }>();
+    if (!session || session.streamer_id !== user.id) return c.json({ error: 'Forbidden' }, 403);
+    await c.env.DB.prepare(`UPDATE two_shot_sessions SET status = 'ended', ended_at = datetime('now') WHERE id = ?`).bind(c.req.param('id')).run();
+    return c.json({ ok: true, status: 'ended' });
+  });
+
+  app.post('/api/two-shot/:id/end', async (c) => {
+    const user = await getAuthUser(c.req.raw, c.env);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+    const session = await c.env.DB.prepare('SELECT * FROM two_shot_sessions WHERE id = ?').bind(c.req.param('id')).first<{ streamer_id: string; viewer_id: string; status: string }>();
+    if (!session) return c.json({ error: 'Not found' }, 404);
+    if (session.streamer_id !== user.id && session.viewer_id !== user.id) return c.json({ error: 'Forbidden' }, 403);
+    await c.env.DB.prepare(`UPDATE two_shot_sessions SET status = 'ended', ended_at = datetime('now') WHERE id = ?`).bind(c.req.param('id')).run();
     return c.json({ ok: true });
   });
 
@@ -151,6 +278,7 @@ export function createApp() {
     await c.env.DB.prepare('INSERT INTO chat_messages (id, stream_id, user_id, username, content, type) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(chatId, streamId, user.id, user.display_name, JSON.stringify({ gift_id, icon: gift.icon, name: gift.name, message }), 'gift').run();
     const updated = await getUserById(c.env.DB, user.id);
+    await createNotification(c.env.DB, stream.streamer_id, 'gift', 'ギフト受信', `${user.display_name} が ${gift.name} を送りました`, `/stream/${streamId}`);
     return c.json({ transaction: { id: txId, gift, points_spent: gift.points_cost }, remaining_points: updated!.points });
   });
 
@@ -168,6 +296,10 @@ export function createApp() {
     try {
       await c.env.DB.prepare('INSERT INTO follows (follower_id, streamer_id) VALUES (?, ?)').bind(user.id, streamerId).run();
       await c.env.DB.prepare('UPDATE users SET followers_count = followers_count + 1 WHERE id = ?').bind(streamerId).run();
+      const streamer = await getUserById(c.env.DB, streamerId);
+      if (streamer) {
+        await createNotification(c.env.DB, streamerId, 'follow', '新しいフォロワー', `${user.display_name} がフォローしました`, `/u/${user.username}`);
+      }
       return c.json({ ok: true, following: true });
     } catch {
       return c.json({ error: 'Already following' }, 409);
@@ -208,6 +340,7 @@ export function createApp() {
     const id = nanoid();
     await c.env.DB.prepare('INSERT INTO two_shot_sessions (id, streamer_id, viewer_id, status) VALUES (?, ?, ?, ?)')
       .bind(id, streamer_id, user.id, 'pending').run();
+    await createNotification(c.env.DB, streamer_id, 'two_shot', '2ショットリクエスト', `${user.display_name} からリクエスト`, '/two-shot');
     return c.json({ session: { id, status: 'pending' } }, 201);
   });
 
