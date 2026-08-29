@@ -93,7 +93,15 @@ export function useBroadcaster(
     return unsub;
   }, [onMessage, send, isLive, createPeerConnection]);
 
-  return { localVideoRef, isLive, error, startBroadcast, stopBroadcast };
+  const toggleAudio = useCallback((enabled: boolean) => {
+    streamRef.current?.getAudioTracks().forEach((t) => { t.enabled = enabled; });
+  }, []);
+
+  const toggleVideo = useCallback((enabled: boolean) => {
+    streamRef.current?.getVideoTracks().forEach((t) => { t.enabled = enabled; });
+  }, []);
+
+  return { localVideoRef, isLive, error, startBroadcast, stopBroadcast, toggleAudio, toggleVideo };
 }
 
 export function useViewer(

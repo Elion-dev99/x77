@@ -1,117 +1,92 @@
-# LiveNova — Next-Generation Live Streaming Platform
+# LiveNova — 次世代ライブ配信プラットフォーム
 
-A modern live streaming platform built to exceed [X77Live](https://x77.jp/) with ultra-low latency WebRTC streaming, real-time chat, animated gifts, multi-language support, and streamer analytics.
+X77Live を超える機能を備えた、本格的なライブ配信サービスです。
 
-![LiveNova Platform](https://img.shields.io/badge/LiveNova-Streaming-pink)
+**公開URL:** https://livenova.clear-chronometer.workers.dev
 
-## Features Beyond X77Live
+## 完成機能一覧
 
-| Feature | X77Live | LiveNova |
-|---------|---------|----------|
-| Streaming Technology | Legacy Flash/HLS | **WebRTC (ultra-low latency)** |
-| UI/UX | Dated desktop-first | **Modern dark theme, mobile-first** |
-| Languages | 4 languages | **4 languages (JP/EN/ZH/KO) with i18n** |
-| Chat | Text only | **Text + emoji reactions + gift animations** |
-| Gifts | Static action gifts | **Animated gift system with 8 tiers** |
-| Analytics | Basic | **Full streamer dashboard with gift breakdown** |
-| Picture-in-Picture | No | **Yes** |
-| Age Verification | Yes | **Yes (improved UX)** |
-| Two-Shot | Yes | **Yes (API ready)** |
-| Points System | 1pt = 1 yen | **Demo points with charge API** |
-| Moderation | Basic | **Report system + chat moderation ready** |
-| Private Rooms | Yes | **Password-protected streams** |
-| Multi-Angle | Yes | **Category support** |
+### 視聴者向け
+- 年齢確認ゲート（4言語）
+- ライブ配信一覧・検索・カテゴリフィルター
+- WebRTC 超低遅延視聴
+- リアルタイムチャット + 絵文字リアクション + ギフトアニメーション
+- フォロー / 配信者プロフィール
+- 2ショットリクエスト
+- プライベートルーム（パスワード保護）
+- プレミアム配信（分課金）
+- ポイント購入（ウォレット）
+- 通知センター
+- ピクチャーインピクチャー
+- 通報機能
 
-## Tech Stack
+### 配信者向け
+- 配信スタジオ（カメラ/マイク ON/OFF）
+- 配信作成（カテゴリ、料金、プライベート、スケジュール）
+- リアルタイムチャット確認
+- 2ショットリクエスト管理（承認/拒否）
+- アナリティクスダッシュボード
+- ギフト内訳
 
-- **Frontend**: React 19, TypeScript, Tailwind CSS 4, Vite, i18next
-- **Backend**: Node.js, Express, WebSocket, SQLite (better-sqlite3)
-- **Streaming**: WebRTC with STUN signaling via WebSocket
-- **Real-time**: WebSocket for chat, gifts, viewer counts, WebRTC signaling
+### インフラ
+- **Cloudflare Workers** — API + 静的配信
+- **D1** — SQLite データベース
+- **Durable Objects** — WebSocket リアルタイム通信
 
-## Quick Start
+## クイックスタート
 
 ```bash
-# Install dependencies
 npm install
-
-# Start development servers (frontend + backend)
-npm run dev
+npm run dev          # Cloudflare Worker ローカル (port 8787)
+npm run dev:local    # 従来 Express サーバー (port 3001 + 5173)
 ```
 
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:3001/api
-- **WebSocket**: ws://localhost:3001/ws
+## デモアカウント
 
-## Demo Accounts
+| ロール | ユーザー名 | パスワード |
+|--------|-----------|-----------|
+| 視聴者 | `demo_viewer` | `demo1234` |
+| 配信者 | `sakura_live` | `demo1234` |
 
-| Role | Username | Password | Points |
-|------|----------|----------|--------|
-| Viewer | `demo_viewer` | `demo1234` | 10,000 |
-| Streamer | `sakura_live` | `demo1234` | 50,000 |
+## Cloudflare デプロイ
 
-Other streamers: `neon_beats`, `kaito_stream`, `luna_nh` (all password: `demo1234`)
+```bash
+export CLOUDFLARE_API_TOKEN="your-token"
+export CLOUDFLARE_ACCOUNT_ID="your-account-id"
+./scripts/deploy-cloudflare.sh
+```
 
-## Usage Guide
-
-### As a Viewer
-1. Pass age verification gate
-2. Browse live streams on the home page
-3. Click a stream to watch via WebRTC
-4. Login to chat, send gifts, and react with emojis
-5. Use Picture-in-Picture for multitasking
-
-### As a Streamer
-1. Login with a streamer account
-2. Go to **Studio** → Create stream → Start broadcasting
-3. Allow camera/microphone permissions
-4. View real-time chat and viewer count
-5. Check **Analytics** for stream performance and gift breakdown
-
-## Project Structure
+## プロジェクト構成
 
 ```
 livenova/
 ├── apps/
-│   ├── web/          # React frontend (Vite)
-│   │   └── src/
-│   │       ├── components/   # UI components
-│   │       ├── context/      # Auth & age gate
-│   │       ├── hooks/        # WebSocket & WebRTC
-│   │       ├── pages/        # Route pages
-│   │       └── lib/          # API client
-│   └── server/       # Express backend
-│       └── src/
-│           ├── db.ts         # SQLite schema
-│           ├── routes.ts     # REST API
-│           ├── websocket.ts  # Real-time handler
-│           └── seed.ts       # Demo data
-└── package.json      # Monorepo root
+│   ├── web/          # React 19 + Tailwind 4 フロントエンド
+│   ├── worker/       # Cloudflare Workers (本番)
+│   └── server/       # Express (ローカル開発用)
+├── scripts/          # デプロイスクリプト
+└── .github/workflows # CI/CD
 ```
 
-## API Endpoints
+## ページ一覧
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/auth/login` | Login |
-| POST | `/api/auth/register` | Register |
-| GET | `/api/streams` | List streams |
-| GET | `/api/streams/:id` | Stream details |
-| POST | `/api/streams` | Create stream |
-| POST | `/api/streams/:id/go-live` | Start streaming |
-| POST | `/api/streams/:id/gift` | Send gift |
-| GET | `/api/gifts` | List gifts |
-| GET | `/api/analytics` | Streamer analytics |
-| GET | `/api/stats` | Platform stats |
+| パス | 説明 |
+|------|------|
+| `/` | ホーム（ライブ一覧） |
+| `/stream/:id` | 配信視聴 |
+| `/u/:username` | 配信者プロフィール |
+| `/studio` | 配信スタジオ |
+| `/analytics` | 配信者アナリティクス |
+| `/wallet` | ポイント購入 |
+| `/notifications` | 通知・2ショット管理 |
+| `/settings` | プロフィール設定 |
+| `/login` | ログイン/登録 |
 
-## Production Deployment
+## Tech Stack
 
-```bash
-npm run build
-PORT=3001 npm start
-```
-
-The server serves the built frontend and API from a single port.
+- Frontend: React 19, TypeScript, Tailwind CSS 4, Vite, i18next
+- Backend: Hono on Cloudflare Workers, D1, Durable Objects
+- Streaming: WebRTC + WebSocket signaling
 
 ## License
 
